@@ -1,0 +1,91 @@
+---
+kind: Secret
+apiVersion: v1
+metadata:
+  name: weather-secret
+  namespace: myns
+  labels: 
+    app: weather-secret
+
+data:
+  api_key: OWExMzM4NjFjMGRlYTkwMGUwZDI1NjAyM2YyYmJiNWM=
+
+
+---
+kind: Deployment
+apiVersion: apps/v1
+
+metadata:
+  name: weather-deploy
+  namespace: myns
+  labels:
+    app: weather-deploy
+    version: v1
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: weather-pod
+      version: v1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      name: weather-pod
+      labels:
+        app: weather-pod
+        version: v1
+    spec:
+      containers:
+        - name: weather-pod
+          image: stackupiss/weather:v1
+          imagePullPolicy: Always
+          env:
+            - name: APP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: weather-secret
+                  key: api_key
+          ports:
+            - name: weather-port
+              containerPort: 3000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 16m
+            # limits:
+            #   cpu: 150m
+            #   memory: 32m
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: weather-port
+            periodSeconds: 60
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: weather-port
+            periodSeconds: 60
+
+---
+kind: Service
+apiVersion: v1
+
+metadata:
+    name: weather-svc
+    namespace: myns
+    labels:
+      app: weather-svc
+
+spec:
+  type: ClusterIP
+  selector: 
+    app: weather-pod
+  ports:
+    - name: weather-svc-port
+      port: 3000
+      targetPort: weather-port
